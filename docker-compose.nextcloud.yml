@@ -1,0 +1,95 @@
+volumes:
+  nextcloud-data:
+    name: nextcloud-data
+  nextcloud_aio_mastercontainer:
+    name: nextcloud-aio-mastercontainer
+#  nextcloud-postgres-backup:
+#    name: nextcloud-postgres-backup
+#  nextcloud-data-backups:
+#    name: nextcloud-data-backups
+#  nextcloud-database-backups:
+#    name: nextcould-database-backups
+                                       
+services:
+  nextcloud-aio-mastercontainer:
+    image: ${NEXTCLOUD_IMAGE_TAG}
+    #image: nextcloud/all-in-one:latest
+    init: true
+    restart: always
+    container_name: nextcloud-aio-mastercontainer 
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nextcloud-data:${DATA_PATH}
+      - ./traefik/letsencrypt:/letsencrypt:ro
+    environment:
+      TZ: ${NEXTCLOUD_TIMEZONE}
+      POSTGRES_HOST: 172.20.0.4 
+      DB_PORT: 5432
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_HOST_PORT: 6379
+      REDIS_HOST_PASSWORD: ${NEXTCLOUD_REDIS_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USERNAME}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_CACERTS_DIR: /letsencrypt
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_HOSTNAME}
+      OVERWRITECLIURL: ${NEXTCLOUD_URL}
+      OVERWRITEPROTOCOL: https
+      OVERWRITEHOST: ${NEXTCLOUD_HOSTNAME}
+      TRUSTED_PROXIES: 172.20.0.0/16 172.21.0.0/16 10.0.0.0/8 fc00::/7 fe80::/10 2001:db8::/32
+      APACHE_PORT: 11000
+      APACHE_IP_BINDING: 127.0.0.1
+      BORG_RETENTION_POLICY: --keep-within=7d --keep-weekly=4 --keep-monthly=6
+    networks:
+      #- nextcloud-network
+      - backend
+      #- traefik-network
+      - srv
+    ports:
+      - 8080:8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_HOSTNAME}`)"
+      - "traefik.http.routers.nextcloud.service=nextcloud"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      - "traefik.http.routers.nextcloud.tls=true"
+      - "traefik.http.routers.nextcloud.tls.certresolver=le"
+      - "traefik.http.services.nextcloud.loadbalancer.passhostheader=true"
+      - "traefik.http.middlewares.nextcloud-securityheaders.headers.stsSeconds=15552000"
+      - "traefik.http.middlewares.nextcloud-securityheaders.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.nextcloud-securityheaders.headers.stsPreload=true"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-redirectregex1,nextcloud-redirectregex2,nextcloud-securityheaders"
+      - "traefik.http.middlewares.nextcloud-redirectregex1.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-redirectregex1.redirectregex.regex=https?://([^/]*)/.well-known/(card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-redirectregex1.redirectregex.replacement=https://$${1}/remote.php/dav/"
+      - "traefik.http.middlewares.nextcloud-redirectregex2.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-redirectregex2.redirectregex.regex=https?://([^/]*)(/.well-known[^#]*)"
+      - "traefik.http.middlewares.nextcloud-redirectregex2.redirectregex.replacement=https://$${1}/index.php$${2}"
+      - "traefik.http.middlewares.compresstraefik.compress=false"
+      - "traefik.docker.network=srv"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      traefik:
+        condition: service_healthy
+
+#  nextcloud-cron:
+#    image: ${NEXTCLOUD_IMAGE_TAG}
+#    entrypoint: /cron.sh
+#    volumes:
+#      - nextcloud-data:${DATA_PATH}
+#      - nextcloud-aio-mastercontainer:${DATA_PATH}
+#    networks:
+#      - backend

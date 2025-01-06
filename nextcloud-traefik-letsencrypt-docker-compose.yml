@@ -1,64 +1,71 @@
-version: '3.8'
+#version: '3.8'
 
-networks:
-  nextcloud-network:
-    external: true
-  traefik-network:
-    external: true
+#networks:
+#  nextcloud-network:
+#    external: true
+#  traefik-network:
+#    external: true
 
 volumes:
-  #nextcloud-data:
+  nextcloud-data:
+    name: nextcloud-data
   nextcloud_aio_mastercontainer:
-  redis-data:
-  nextcloud-postgres:
-  #nextcloud-postgres-backup:
-  #nextcloud-data-backups:
-  #nextcloud-database-backups:
-  traefik-certificates:
+    name: nextcloud-aio-mastercontainer
+#  redis-data:
+#    name: redis-data
+#  nextcloud-postgres:
+#    name: nextcloud-postgres
+#  nextcloud-postgres-backup:
+#    name: nextcloud-postgres-backup
+#  nextcloud-data-backups:
+#    name: nextcloud-data-backups
+#  nextcloud-database-backups:
+#    name: nextcould-database-backups
+  #traefik-certificates:
 
 services:
-  postgres:
-    image: ${NEXTCLOUD_POSTGRES_IMAGE_TAG}
-    volumes:
-      - nextcloud-postgres:/var/lib/postgresql/data
-    environment:
-      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
-      POSTGRES_USER: ${NEXTCLOUD_DB_USER} 
-      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
-    networks:
-      - nextcloud-network
-    healthcheck:
-      test: [ "CMD", "pg_isready", "-q", "-d", "${NEXTCLOUD_DB_NAME}", "-U", "${NEXTCLOUD_DB_USER}" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
+#  postgres:
+#    image: ${NEXTCLOUD_POSTGRES_IMAGE_TAG}
+#    volumes:
+#      - nextcloud-postgres:/var/lib/postgresql/data
+#    environment:
+#      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+#      POSTGRES_USER: ${NEXTCLOUD_DB_USER} 
+#      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+#    networks:
+#      - nextcloud-network
+#    healthcheck:
+#      test: [ "CMD", "pg_isready", "-q", "-d", "${NEXTCLOUD_DB_NAME}", "-U", "${NEXTCLOUD_DB_USER}" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 3
+#      start_period: 60s
+#    restart: unless-stopped
 
-  redis:
-    image: ${NEXTCLOUD_REDIS_IMAGE_TAG}
-    command: ["redis-server", "--requirepass", "$NEXTCLOUD_REDIS_PASSWORD"]
-    volumes:
-      - redis-data:/data
-    networks:
-      - nextcloud-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
+#  redis:
+#    image: ${NEXTCLOUD_REDIS_IMAGE_TAG}
+#    command: ["redis-server", "--requirepass", "$NEXTCLOUD_REDIS_PASSWORD"]
+#    volumes:
+#      - redis-data:/data
+#    networks:
+#      - nextcloud-network
+#    healthcheck:
+#      test: ["CMD", "redis-cli", "ping"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 3
+#      start_period: 60s
+#    restart: unless-stopped
 
   nextcloud-aio-mastercontainer:
     #image: ${NEXTCLOUD_IMAGE_TAG}
     image: nextcloud/all-in-one:latest
     init: true
     restart: always
-    container_name: nextcloud-aio-mastercontainer # This line is not allowed to be changed as otherwise AIO will not work correctly
+    #container_name: nextcloud-aio-mastercontainer # This line is not allowed to be changed as otherwise AIO will not work correctly
     volumes:
       - nextcloud_aio_mastercontainer:/mnt/docker-aio-config # This line is not allowed to be changed as otherwise the built-in backup solution will not work
-      # - /var/run/docker.sock:/var/run/docker.sock:ro # May be changed on macOS, Windows or docker rootless. See the applicable documentation. If adjusting, don't forget to also set 'WATCHTOWER_DOCKER_SOCKET_PATH'!
+      - /var/run/docker.sock:/var/run/docker.sock:ro # May be changed on macOS, Windows or docker rootless. See the applicable documentation. If adjusting, don't forget to also set 'WATCHTOWER_DOCKER_SOCKET_PATH'!
       # - nextcloud-data:${DATA_PATH}
     environment:
       TZ: ${NEXTCLOUD_TIMEZONE}
@@ -82,13 +89,11 @@ services:
     networks:
       - nextcloud-network
       - traefik-network
-    network_mode: bridge
+    network_mode: host 
     ports:
       # - 80:80 # Can be removed when running behind a web server or reverse proxy (like Apache, Nginx, Caddy, Cloudflare Tunnel and else). See https://github.com/nextcloud/all-in-one/blob/main/reverse-proxy.md
       - 8080:8080
       # - 8443:8443 # Can be removed when running behind a web server or reverse proxy (like Apache, Nginx, Caddy, Cloudflare Tunnel and else). See https://github.com/nextcloud/all-in-one/blob/main/reverse-proxy.md
-    # environment: # Is needed when using any of the options below
-
     ##  environment: # these vars should be moved the the matching tag above when using any of the options below
       # AIO_DISABLE_BACKUP_SECTION: false # Setting this to true allows to hide the backup section in the AIO interface. See https://github.com/nextcloud/all-in-one#how-to-disable-the-backup-section
       # AIO_COMMUNITY_CONTAINERS: # With this variable, you can add community containers very easily. See https://github.com/nextcloud/all-in-one/tree/main/community-containers#community-containers
@@ -140,74 +145,74 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
-        # condition: service_healthy
+         condition: service_healthy
       - redis
-        # condition: service_healthy
+         condition: service_healthy
       - traefik
-        # condition: service_healthy
+         condition: service_healthy
 
-  #nextcloud-cron:
-  #  image: ${NEXTCLOUD_IMAGE_TAG}
-  #  entrypoint: /cron.sh
-  #  volumes:
-  #    #- nextcloud-data:${DATA_PATH}
-  #    #- nextcloud-aio-mastercontainer:${DATA_PATH}
-  #  networks:
-  #    - nextcloud-network
-
-  traefik:
-    #image: ${TRAEFIK_IMAGE_TAG}
-    image: traefik:v3.1
-    command:
-      - "--log.level=${TRAEFIK_LOG_LEVEL}"
-      - "--accesslog=true"
-      - "--api.dashboard=true"
-      - "--api.insecure=true"
-      - "--ping=true"
-      - "--ping.entrypoint=ping"
-      - "--entryPoints.ping.address=:8082"
-      - "--entryPoints.web.address=:80"
-      - "--entryPoints.websecure.address=:443"
-      - "--providers.docker=true"
-      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
-      - "--providers.docker.exposedByDefault=false"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
-      - "--metrics.prometheus=true"
-      - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
-      - "--global.checkNewVersion=true"
-      - "--global.sendAnonymousUsage=false"
+  nextcloud-cron:
+    image: ${NEXTCLOUD_IMAGE_TAG}
+    entrypoint: /cron.sh
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - traefik-certificates:/etc/traefik/acme
+      #- nextcloud-data:${DATA_PATH}
+      #- nextcloud-aio-mastercontainer:${DATA_PATH}
     networks:
-      - traefik-network
-    ports:
-      - "80:80"
-      - "443:443"
-    healthcheck:
-      test: ["CMD", "wget", "http://localhost:8082/ping","--spider"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOSTNAME}`)"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
-      - "traefik.http.routers.dashboard.tls=true"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.services.dashboard.loadbalancer.passhostheader=true"
-      - "traefik.http.routers.dashboard.middlewares=authtraefik"
-      - "traefik.http.middlewares.authtraefik.basicauth.users=${TRAEFIK_BASIC_AUTH}"
-      - "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)"
-      - "traefik.http.routers.http-catchall.entrypoints=web"
-      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-    restart: unless-stopped
+      - nextcloud-network
+
+  #traefik:
+  #  #image: ${TRAEFIK_IMAGE_TAG}
+  #  image: traefik:v3.1
+  #  command:
+  #    - "--log.level=${TRAEFIK_LOG_LEVEL}"
+  #    - "--accesslog=true"
+  #    - "--api.dashboard=true"
+  #    - "--api.insecure=true"
+  #    - "--ping=true"
+  #    - "--ping.entrypoint=ping"
+  #    - "--entryPoints.ping.address=:8082"
+  #    - "--entryPoints.web.address=:80"
+  #    - "--entryPoints.websecure.address=:443"
+  #    - "--providers.docker=true"
+  #    - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+  #    - "--providers.docker.exposedByDefault=false"
+  #    - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+  #    - "--certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL}"
+  #    - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
+  #    - "--metrics.prometheus=true"
+  #    - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
+  #    - "--global.checkNewVersion=true"
+  #    - "--global.sendAnonymousUsage=false"
+  #  volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock
+  #    - traefik-certificates:/etc/traefik/acme
+  #  networks:
+  #    - traefik-network
+  #  ports:
+  #    - "80:80"
+  #    - "443:443"
+  #  healthcheck:
+  #    test: ["CMD", "wget", "http://localhost:8082/ping","--spider"]
+  #    interval: 10s
+  #    timeout: 5s
+  #    retries: 3
+  #    start_period: 5s
+  #  labels:
+  #    - "traefik.enable=true"
+  #    - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOSTNAME}`)"
+  #    - "traefik.http.routers.dashboard.service=api@internal"
+  #    - "traefik.http.routers.dashboard.entrypoints=websecure"
+  #    - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
+  #    - "traefik.http.routers.dashboard.tls=true"
+  #    - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+  #    - "traefik.http.services.dashboard.loadbalancer.passhostheader=true"
+  #    - "traefik.http.routers.dashboard.middlewares=authtraefik"
+  #    - "traefik.http.middlewares.authtraefik.basicauth.users=${TRAEFIK_BASIC_AUTH}"
+  #    - "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)"
+  #    - "traefik.http.routers.http-catchall.entrypoints=web"
+  #    - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+  #    - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+  #  restart: unless-stopped
 
   #backups:
   #  image: ${NEXTCLOUD_POSTGRES_IMAGE_TAG}
