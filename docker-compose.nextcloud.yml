@@ -45,9 +45,10 @@ services:
       BORG_RETENTION_POLICY: --keep-within=7d --keep-weekly=4 --keep-monthly=6
     networks:
       #- nextcloud-network
-      - backend
+      backend:
       #- traefik-network
-      - srv
+      srv:
+        ipv4_address: 172.20.0.8
     ports:
       - 8080:8080
     healthcheck:
