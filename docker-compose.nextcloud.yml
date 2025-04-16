@@ -3,6 +3,8 @@ volumes:
     name: nextcloud-data
   nextcloud_aio_mastercontainer:
     name: nextcloud-aio-mastercontainer
+  nextcloud-postgres:
+    name: nextcloud-postgres
 #  nextcloud-postgres-backup:
 #    name: nextcloud-postgres-backup
 #  nextcloud-data-backups:
@@ -98,3 +100,29 @@ services:
 #      - nextcloud-aio-mastercontainer:${DATA_PATH}
 #    networks:
 #      - backend
+  db:
+    #image: ${NEXTCLOUD_POSTGRES_IMAGE_TAG}
+    image: timescale/timescaledb:2.19.1-pg17
+    #image: ghcr.io/dandenkijin/timescaledb:2.19.1-pg17
+    volumes:
+      - nextcloud-postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER} 
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      #POSTGRES_MULTIPLE_DATABASES: nc,odoo,stal
+      #POSTGRES_USER: ${DB_USER}
+      #POSTGRES_PASSWORD: ${DB_PASSWORD}
+    networks:
+      #- nextcloud-network
+      srv:
+        ipv4_address: 172.20.0.4
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "${NEXTCLOUD_DB_NAME}", "-U", "${NEXTCLOUD_DB_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
